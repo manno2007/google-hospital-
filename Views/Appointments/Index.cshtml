@@ -1,0 +1,58 @@
+@model IEnumerable<HospitalManagementSystem.Models.Appointment>
+
+@{
+    ViewData["Title"] = "Appointments";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Appointments</h2>
+    <a asp-action="Create" class="btn btn-primary">+ New Appointment</a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- LINQ Search Form -->
+<form asp-action="Index" method="get" class="mb-3 d-flex gap-2">
+    <input type="text" name="search" value="@ViewBag.Search" class="form-control" placeholder="Search by patient, doctor, or diagnosis..." />
+    <button type="submit" class="btn btn-secondary">Search</button>
+    <a asp-action="Index" class="btn btn-outline-secondary">Reset</a>
+</form>
+
+<table class="table table-striped table-hover border">
+    <thead class="table-dark">
+        <tr>
+            <th>Date</th>
+            <th>Patient</th>
+            <th>Doctor</th>
+            <th>Department</th>
+            <th>Diagnosis</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var item in Model)
+    {
+        <tr>
+            <td>@item.AppointmentDate.ToString("yyyy-MM-dd HH:mm")</td>
+            <td>@item.Patient?.Name</td>
+            <td>@item.Doctor?.Name</td>
+            <td><span class="badge bg-info text-dark">@item.Doctor?.Department?.Name</span></td>
+            <td>@item.Diagnosis</td>
+            <td>
+                <div class="d-flex gap-1">
+                    <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Edit</a>
+                    <form asp-action="Delete" asp-route-id="@item.Id" method="post" onsubmit="return confirm('Cancel appointment?');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
