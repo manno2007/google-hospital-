@@ -1,0 +1,6 @@
+{
+  "name": "ASP.NET Core 8 Hospital Management System",
+  "description": "A complete, production-ready ASP.NET Core MVC 8 Hospital Management System with Entity Framework Core, SQLite, full CRUD controllers, Razor views, and interactive code explorer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
