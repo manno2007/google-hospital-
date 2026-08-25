@@ -16,7 +16,8 @@ public class AppointmentsController : Controller
         _context = context;
     }
 
-    // GET: Appointments (LINQ: Include + Where + OrderBy)
+    // GET: Appointments
+    // LINQ: .Include() for Eager Loading, .Where() for Search, .OrderByDescending() for Sorting
     public async Task<IActionResult> Index(string? search)
     {
         var query = _context.Appointments
@@ -25,88 +26,135 @@ public class AppointmentsController : Controller
                 .ThenInclude(d => d.Department)
             .AsNoTracking();
 
-        // LINQ Filtering
-        if (!string.IsNullOrEmpty(search))
+        if (!string.IsNullOrWhiteSpace(search))
         {
             query = query.Where(a => 
-                a.Patient!.Name.Contains(search) || 
-                a.Doctor!.Name.Contains(search) ||
-                a.Diagnosis.Contains(search));
+                a.Patient!.Name.ToLower().Contains(search.ToLower()) || 
+                a.Doctor!.Name.ToLower().Contains(search.ToLower()) ||
+                a.Diagnosis.ToLower().Contains(search.ToLower()));
         }
 
-        // LINQ Sorting
-        var list = await query.OrderByDescending(a => a.AppointmentDate).ToListAsync();
+        var appointments = await query.OrderByDescending(a => a.AppointmentDate).ToListAsync();
         ViewBag.Search = search;
-        return View(list);
+        return View(appointments);
+    }
+
+    // GET: Appointments/Details/5
+    public async Task<IActionResult> Details(int? id)
+    {
+        if (id == null) return NotFound();
+
+        var appointment = await _context.Appointments
+            .Include(a => a.Patient)
+            .Include(a => a.Doctor)
+                .ThenInclude(d => d.Department)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (appointment == null) return NotFound();
+
+        return View(appointment);
     }
 
     // GET: Appointments/Create
     public IActionResult Create()
     {
-        ViewBag.PatientId = new SelectList(_context.Patients, "Id", "Name");
-        ViewBag.DoctorId = new SelectList(_context.Doctors, "Id", "Name");
-        return View();
+        PopulateDropdowns();
+        return View(new Appointment { AppointmentDate = DateTime.Now.AddHours(2) });
     }
 
-    // POST: Appointments/Create (Post-Redirect-Get Pattern)
+    // POST: Appointments/Create
+    // Protocol: [ValidateAntiForgeryToken] for CSRF + [Bind] for Over-Posting prevention + PRG Pattern
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Appointment appointment)
+    public async Task<IActionResult> Create([Bind("AppointmentDate,Diagnosis,PatientId,DoctorId")] Appointment appointment)
     {
         if (ModelState.IsValid)
         {
             _context.Add(appointment);
             await _context.SaveChangesAsync();
             TempData["Success"] = "Appointment scheduled successfully!";
-            return RedirectToAction(nameof(Index));
+            return RedirectToAction(nameof(Index)); // Post-Redirect-Get (PRG)
         }
 
-        ViewBag.PatientId = new SelectList(_context.Patients, "Id", "Name", appointment.PatientId);
-        ViewBag.DoctorId = new SelectList(_context.Doctors, "Id", "Name", appointment.DoctorId);
+        PopulateDropdowns(appointment.PatientId, appointment.DoctorId);
         return View(appointment);
     }
 
-    // GET: Appointments/Edit/5 (LINQ: FindAsync)
-    public async Task<IActionResult> Edit(int id)
+    // GET: Appointments/Edit/5
+    public async Task<IActionResult> Edit(int? id)
     {
+        if (id == null) return NotFound();
+
         var appointment = await _context.Appointments.FindAsync(id);
         if (appointment == null) return NotFound();
 
-        ViewBag.PatientId = new SelectList(_context.Patients, "Id", "Name", appointment.PatientId);
-        ViewBag.DoctorId = new SelectList(_context.Doctors, "Id", "Name", appointment.DoctorId);
+        PopulateDropdowns(appointment.PatientId, appointment.DoctorId);
         return View(appointment);
     }
 
     // POST: Appointments/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(Appointment appointment)
+    public async Task<IActionResult> Edit(int id, [Bind("Id,AppointmentDate,Diagnosis,PatientId,DoctorId")] Appointment appointment)
     {
+        if (id != appointment.Id) return NotFound();
+
         if (ModelState.IsValid)
         {
-            _context.Update(appointment);
-            await _context.SaveChangesAsync();
-            TempData["Success"] = "Appointment updated!";
-            return RedirectToAction(nameof(Index));
+            try
+            {
+                _context.Update(appointment);
+                await _context.SaveChangesAsync();
+                TempData["Success"] = "Appointment updated successfully!";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!_context.Appointments.Any(e => e.Id == appointment.Id)) return NotFound();
+                throw;
+            }
         }
 
-        ViewBag.PatientId = new SelectList(_context.Patients, "Id", "Name", appointment.PatientId);
-        ViewBag.DoctorId = new SelectList(_context.Doctors, "Id", "Name", appointment.DoctorId);
+        PopulateDropdowns(appointment.PatientId, appointment.DoctorId);
+        return View(appointment);
+    }
+
+    // GET: Appointments/Delete/5
+    public async Task<IActionResult> Delete(int? id)
+    {
+        if (id == null) return NotFound();
+
+        var appointment = await _context.Appointments
+            .Include(a => a.Patient)
+            .Include(a => a.Doctor)
+                .ThenInclude(d => d.Department)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (appointment == null) return NotFound();
+
         return View(appointment);
     }
 
     // POST: Appointments/Delete/5
-    [HttpPost]
+    [HttpPost, ActionName("Delete")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> DeleteConfirmed(int id)
     {
         var appointment = await _context.Appointments.FindAsync(id);
         if (appointment != null)
         {
             _context.Appointments.Remove(appointment);
             await _context.SaveChangesAsync();
-            TempData["Success"] = "Appointment cancelled!";
+            TempData["Success"] = "Appointment cancelled and removed!";
         }
         return RedirectToAction(nameof(Index));
+    }
+
+    private void PopulateDropdowns(int? selectedPatientId = null, int? selectedDoctorId = null)
+    {
+        ViewBag.PatientId = new SelectList(_context.Patients.OrderBy(p => p.Name), "Id", "Name", selectedPatientId);
+        ViewBag.DoctorId = new SelectList(_context.Doctors.OrderBy(d => d.Name), "Id", "Name", selectedDoctorId);
     }
 }
